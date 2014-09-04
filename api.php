@@ -1,19 +1,41 @@
 <?php
 
-require_once('vendor/autoload.php');
+require_once('./vendor/autoload.php');
 require_once('./Storage.php');
 require_once('./HttpBasicAuth.php');
+
 
 // init slim application
 $app = new \Slim\Slim(
   file_exists('./config.local.php') ? require_once('./config.local.php'): require_once('./config.php')
 );
 
+
+// set json http header
+$app->response->headers->set('Content-Type', 'application/json');
+$app->response->headers->set('Access-Control-Allow-Origin', '*');
+
+
+$app->error(function(\Exception $e) use ($app) {
+  echo json_encode([
+    'error' => $e->getMessage(),
+  ]);
+});
+
+
+$app->notFound(function() use ($app) {
+  echo json_encode([
+    'error' => 'Not Found',
+  ]);
+});
+
+
 // get access to storage
 $connection = new PDO($app->config('pdo.dsn'), $app->config('pdo.username'), $app->config('pdo.password'));
 $schema = json_decode(file_get_contents('./data/schema.json'), true);
 $storage = new Storage($connection, $schema);
 $app->storage = $storage;
+
 
 // auth
 $app->add(new \Slim\Extras\Middleware\HttpBasicAuth(function($username, $password) use ($app) {
@@ -33,9 +55,6 @@ $app->add(new \Slim\Extras\Middleware\HttpBasicAuth(function($username, $passwor
   return false;
 }));
 
-// set json http header
-$app->response->headers->set('Content-Type', 'application/json');
-$app->response->headers->set('Access-Control-Allow-Origin', '*');
 
 // get all collections
 $app->get('/collections', function() use ($app) {
@@ -44,6 +63,7 @@ $app->get('/collections', function() use ($app) {
     'result'=>$schema,
   ]));
 });
+
 
 // update collections order
 $app->post('/collections', function() use ($app) {
@@ -64,6 +84,7 @@ $app->post('/collections', function() use ($app) {
   file_put_contents('./data/schema.json', json_encode($reorderedSchema, JSON_PRETTY_PRINT));
 });
 
+
 // update collecion schema
 $app->post('/collections/:name', function ($name) use ($app) {
   $data = json_decode($app->request->getBody(), true);
@@ -82,6 +103,7 @@ $app->post('/collections/:name', function ($name) use ($app) {
   }
 });
 
+
 // delete collection
 $app->delete('/collections/:name', function($name) use ($app) {
   $result = false;
@@ -98,6 +120,7 @@ $app->delete('/collections/:name', function($name) use ($app) {
     'result' => $result,
   ]));
 });
+
 
 // get collection entries
 $app->get('/collections/:name/entries', function($name) use ($app) {
@@ -148,6 +171,8 @@ $app->get('/collections/:name/entries', function($name) use ($app) {
   ]));
 });
 
+
+//
 $app->get('/collections/:name/total', function($name) use ($app) {
   $total = $app->storage->collection($name)->count();
 
@@ -155,6 +180,7 @@ $app->get('/collections/:name/total', function($name) use ($app) {
     'result' => $total,
   ]));
 });
+
 
 // update collection entries
 $app->post('/collections/:name/entries', function($name) use ($app) {
@@ -175,6 +201,7 @@ $app->post('/collections/:name/entries', function($name) use ($app) {
   }
 });
 
+
 // delete collection entries
 $app->delete('/collections/:name/entries', function($name) use ($app) {
   $data = json_decode($app->request->getBody(), true);
@@ -186,13 +213,6 @@ $app->delete('/collections/:name/entries', function($name) use ($app) {
   ]));
 });
 
-// test
-// $app->get('/test', function() use ($app) {
-//   $result = $app->storage->collection('user')->filter([
-//     'id'=>['from'=>2, 'to'=>2],
-//   ])->all();
 
-//   $app->response->write(json_encode($result));
-// });
-
+//
 $app->run();
